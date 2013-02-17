@@ -67,11 +67,13 @@ GstEnginePipeline::GstEnginePipeline(GstEngine* engine)
     end_offset_nanosec_(-1),
     next_beginning_offset_nanosec_(-1),
     next_end_offset_nanosec_(-1),
+    next_accurate_seek_(false),
     ignore_next_seek_(false),
     ignore_tags_(false),
     pipeline_is_initialised_(false),
     pipeline_is_connected_(false),
     pending_seek_nanosec_(-1),
+    pending_seek_accurate_(false),
     volume_percent_(100),
     volume_modifier_(1.0),
     fader_(NULL),
@@ -397,7 +399,7 @@ bool GstEnginePipeline::InitFromString(const QString& pipeline) {
 
 bool GstEnginePipeline::InitFromUrl(const QUrl &url, qint64 end_nanosec) {
   pipeline_ = gst_pipeline_new("pipeline");
-  
+
   if (url.scheme() == "cdda" && !url.path().isEmpty()) {
     // Currently, Gstreamer can't handle input CD devices inside cdda URL. So
     // we handle them ourselve: we extract the track number and re-create an
@@ -609,7 +611,8 @@ void GstEnginePipeline::StateChangedMessageReceived(GstMessage* msg) {
     pipeline_is_initialised_ = true;
     if (pending_seek_nanosec_ != -1 && pipeline_is_connected_) {
       QMetaObject::invokeMethod(this, "Seek", Qt::QueuedConnection,
-                                Q_ARG(qint64, pending_seek_nanosec_));
+                                Q_ARG(qint64, pending_seek_nanosec_),
+                                Q_ARG(bool, pending_seek_accurate_));
     }
   }
 
@@ -661,7 +664,9 @@ void GstEnginePipeline::NewPadCallback(GstElement*, GstPad* pad, gpointer self) 
   instance->pipeline_is_connected_ = true;
   if (instance->pending_seek_nanosec_ != -1 && instance->pipeline_is_initialised_) {
     QMetaObject::invokeMethod(instance, "Seek", Qt::QueuedConnection,
-                              Q_ARG(qint64, instance->pending_seek_nanosec_));
+                              Q_ARG(qint64, instance->pending_seek_nanosec_),
+                              Q_ARG(bool, instance->pending_seek_accurate_)
+                              );
   }
 }
 
@@ -696,6 +701,7 @@ bool GstEnginePipeline::HandoffCallback(GstPad*, GstBuffer* buf, gpointer self) 
           instance->next_url_ = QUrl();
           instance->next_beginning_offset_nanosec_ = 0;
           instance->next_end_offset_nanosec_ = 0;
+          instance->next_accurate_seek_ = false;
 
           // GstEngine will try to seek to the start of the new section, but
           // we're already there so ignore it.
@@ -703,8 +709,30 @@ bool GstEnginePipeline::HandoffCallback(GstPad*, GstBuffer* buf, gpointer self) 
 
           emit instance->EndOfStreamReached(instance->id(), true);
         } else {
-          // We have a next song but we can't cheat, so move to it normally.
-          instance->TransitionToNext();
+          // We need a seek transition, because we're playing the same
+          // url, but at a different offset.
+          // And if we're going to do a normal transition, we can
+          // sometimes be too late with loading and seeking.
+          // Which results in playing a couple of seconds of the
+          // next song.
+          instance->end_offset_nanosec_ = instance->next_end_offset_nanosec_;
+          qint64 seek = instance->next_beginning_offset_nanosec_;
+          bool accurate = instance->next_accurate_seek_;
+          instance->next_url_ = QUrl();
+          instance->next_beginning_offset_nanosec_ = 0;
+          instance->next_end_offset_nanosec_ = 0;
+          instance->next_accurate_seek_ = false;
+
+          // GstEngine will try to seek to the start of the new section, and
+          // that's OK.
+          instance->pending_seek_nanosec_ = seek;
+          instance->pending_seek_accurate_ = accurate;
+          QMetaObject::invokeMethod(instance, "Seek", Qt::QueuedConnection,
+                                Q_ARG(qint64, instance->pending_seek_nanosec_),
+                                Q_ARG(bool, instance->pending_seek_accurate_));
+
+          // Just tell the Engine we've moved on.
+          emit instance->EndOfStreamReached(instance->id(), true);
         }
       } else {
         // There's no next song
@@ -795,6 +823,8 @@ void GstEnginePipeline::SourceSetupCallback(GstURIDecodeBin* bin, GParamSpec *ps
   }
 }
 
+
+//TODO: Maybe we need to do something here for accurate seeking
 void GstEnginePipeline::TransitionToNext() {
   GstElement* old_decode_bin = uridecodebin_;
 
@@ -852,7 +882,8 @@ QFuture<GstStateChangeReturn> GstEnginePipeline::SetState(GstState state) {
       &set_state_threadpool_, &gst_element_set_state, pipeline_, state);
 }
 
-bool GstEnginePipeline::Seek(qint64 nanosec) {
+bool GstEnginePipeline::Seek(qint64 nanosec, bool accurate_seek) {
+
   if (ignore_next_seek_) {
     ignore_next_seek_ = false;
     return true;
@@ -860,12 +891,15 @@ bool GstEnginePipeline::Seek(qint64 nanosec) {
 
   if (!pipeline_is_connected_ || !pipeline_is_initialised_) {
     pending_seek_nanosec_ = nanosec;
+    pending_seek_accurate_ = accurate_seek;
     return true;
   }
 
-  pending_seek_nanosec_ = -1;
-  return gst_element_seek_simple(pipeline_, GST_FORMAT_TIME,
-                                 GST_SEEK_FLAG_FLUSH, nanosec);
+  pending_seek_nanosec_  = -1;
+  pending_seek_accurate_ = false;
+  int flags=(int) GST_SEEK_FLAG_FLUSH | ((accurate_seek) ? GST_SEEK_FLAG_ACCURATE : GST_SEEK_FLAG_NONE);
+
+  return gst_element_seek_simple(pipeline_, GST_FORMAT_TIME, (GstSeekFlags) flags, nanosec);
 }
 
 void GstEnginePipeline::SetEqualizerEnabled(bool enabled) {
@@ -976,8 +1010,9 @@ void GstEnginePipeline::RemoveAllBufferConsumers() {
 
 void GstEnginePipeline::SetNextUrl(const QUrl& url,
                                    qint64 beginning_nanosec,
-                                   qint64 end_nanosec) {
+                                   qint64 end_nanosec, bool accurate_seek) {
   next_url_ = url;
   next_beginning_offset_nanosec_ = beginning_nanosec;
   next_end_offset_nanosec_ = end_nanosec;
+  next_accurate_seek_ = accurate_seek;
 }

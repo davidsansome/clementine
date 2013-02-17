@@ -240,6 +240,7 @@ void LibraryWatcher::ScanSubdirectory(
   }
 
   QMap<QString, QStringList> album_art;
+  QHash<QString, QString> cuesheet_mapping;
   QStringList files_on_disk;
   SubdirectoryList my_new_subdirs;
 
@@ -278,7 +279,12 @@ void LibraryWatcher::ScanSubdirectory(
       QString ext_part(ExtensionPart(child));
       QString dir_part(DirectoryPart(child));
 
-      if (sValidImages.contains(ext_part))
+      if (ext_part=="cue") {
+          CueParser parser(child);
+          QString cue_file = child;
+          QString media_file = parser.MediaFile();
+          cuesheet_mapping[media_file] = cue_file;
+      } else if (sValidImages.contains(ext_part))
         album_art[dir_part] << child;
       else if (!child_info.isHidden())
         files_on_disk << child;
@@ -297,7 +303,12 @@ void LibraryWatcher::ScanSubdirectory(
     if (stop_requested_) return;
 
     // associated cue
-    QString matching_cue = NoExtensionPart(file) + ".cue";
+    QString matching_cue;
+    if (cuesheet_mapping.contains(file)) {
+        matching_cue = cuesheet_mapping[file];
+    } else {
+        matching_cue = NoExtensionPart(file) + ".cue";
+    }
 
     Song matching_song;
     if (FindSongByPath(songs_in_db, file, &matching_song)) {
@@ -516,11 +527,11 @@ void LibraryWatcher::PreserveUserSetData(const QString& file, const QString& ima
 
   out->MergeUserSetData(matching_song);
 
-  // The song was deleted from the database (e.g. due to an unmounted 
+  // The song was deleted from the database (e.g. due to an unmounted
   // filesystem), but has been restored.
   if (matching_song.is_unavailable()) {
     qLog(Debug) << file << " unavailable song restored";
-    
+
     t->new_songs << *out;
   } else if (!matching_song.IsMetadataEqual(*out)) {
     qLog(Debug) << file << "metadata changed";
@@ -623,14 +634,14 @@ void LibraryWatcher::RescanPathsNow() {
 }
 
 QString LibraryWatcher::PickBestImage(const QStringList& images) {
-  
+
   // This is used when there is more than one image in a directory.
   // Pick the biggest image that matches the most important filter
-  
+
   QStringList filtered;
-  
+
   foreach(const QString& filter_text, best_image_filters_) {
-    // the images in the images list are represented by a full path, 
+    // the images in the images list are represented by a full path,
     // so we need to isolate just the filename
     foreach(const QString& image, images) {
       QFileInfo file_info(image);
@@ -639,13 +650,13 @@ QString LibraryWatcher::PickBestImage(const QStringList& images) {
         filtered << image;
     }
 
-    /* We assume the filters are give in the order best to worst, so 
+    /* We assume the filters are give in the order best to worst, so
       if we've got a result, we go with it. Otherwise we might
       start capturing more generic rules */
     if (!filtered.isEmpty())
       break;
   }
-  
+
   if (filtered.isEmpty()){
     // the filter was too restrictive, just use the original list
     filtered = images;

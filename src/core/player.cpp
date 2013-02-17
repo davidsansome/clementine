@@ -248,7 +248,7 @@ void Player::Stop() {
 }
 
 void Player::Previous() {
-  PreviousItem(Engine::Manual);  
+  PreviousItem(Engine::Manual);
 }
 
 void Player::PreviousItem(Engine::TrackChangeFlags change) {
@@ -292,7 +292,9 @@ int Player::GetVolume() const {
 }
 
 void Player::PlayAt(int index, Engine::TrackChangeFlags change, bool reshuffle) {
-  if (change == Engine::Manual && engine_->position_nanosec() != engine_->length_nanosec()) {
+  bool manual=(change & Engine::Manual);
+
+  if (manual && engine_->position_nanosec() != engine_->length_nanosec()) {
     emit TrackSkipped(current_item_);
     const QUrl& url = current_item_->Url();
     if (url_handlers_.contains(url.scheme())) {
@@ -328,6 +330,9 @@ void Player::PlayAt(int index, Engine::TrackChangeFlags change, bool reshuffle) 
     HandleLoadResult(url_handlers_[url.scheme()]->StartLoading(url));
   } else {
     loading_async_ = QUrl();
+    if (current_item_->Metadata().has_cue()) {
+        change |= Engine::AccurateSeek;
+    }
     engine_->Play(current_item_->Url(), change,
                   current_item_->Metadata().has_cue(),
                   current_item_->Metadata().beginning_nanosec(),
@@ -352,13 +357,13 @@ void Player::CurrentMetadataChanged(const Song& metadata) {
 
 void Player::SeekTo(int seconds) {
   const qint64 length_nanosec = engine_->length_nanosec();
-  
+
   // If the length is 0 then either there is no song playing, or the song isn't
   // seekable.
   if (length_nanosec <= 0) {
     return;
   }
-  
+
   const qint64 nanosec = qBound(0ll, qint64(seconds) * kNsecPerSec,
                                 length_nanosec);
   engine_->Seek(nanosec);

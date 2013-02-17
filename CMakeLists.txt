@@ -9,6 +9,7 @@ include(cmake/Deb.cmake)
 include(cmake/Rpm.cmake)
 include(cmake/SpotifyVersion.cmake)
 include(cmake/OptionalSource.cmake)
+include(cmake/FindMP3Splt.cmake)
 set(CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake)
 
 if (CMAKE_CXX_COMPILER MATCHES ".*clang")
@@ -60,6 +61,7 @@ find_package(Gettext REQUIRED)
 find_package(PkgConfig REQUIRED)
 find_package(Protobuf REQUIRED)
 find_package(FFTW3)
+find_package(MP3Splt REQUIRED)
 
 pkg_check_modules(TAGLIB REQUIRED taglib>=1.6)
 pkg_check_modules(QJSON REQUIRED QJson)
@@ -150,6 +152,7 @@ add_definitions(${QT_DEFINITIONS})
 link_directories(${TAGLIB_LIBRARY_DIRS})
 link_directories(${QJSON_LIBRARY_DIRS})
 link_directories(${GSTREAMER_LIBRARY_DIRS})
+link_directories(${MP3SPLT_LIBRARY_DIRS})
 
 # Don't try to use webkit if their include directories couldn't be found.
 if (NOT QT_QTWEBKIT_INCLUDE_DIR)
@@ -163,6 +166,7 @@ include_directories(${GSTREAMER_INCLUDE_DIRS})
 include_directories(${GLIB_INCLUDE_DIRS})
 include_directories(${GLIBCONFIG_INCLUDE_DIRS})
 include_directories(${LIBXML_INCLUDE_DIRS})
+include_directories(${MP3SPLTL_INCLUDE_DIRS})
 
 if (WIN32)
   # RC compiler

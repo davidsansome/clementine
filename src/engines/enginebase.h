@@ -47,12 +47,12 @@ class Base : public QObject, boost::noncopyable {
 
   virtual bool Init() = 0;
 
-  virtual void StartPreloading(const QUrl&, bool, qint64, qint64) {}
-  virtual bool Play(quint64 offset_nanosec) = 0;
+  virtual void StartPreloading(const QUrl&, bool, qint64, qint64, bool accurateseek = false) {}
+  virtual bool Play(quint64 offset_nanosec, bool accurateseek = false ) = 0;
   virtual void Stop() = 0;
   virtual void Pause() = 0;
   virtual void Unpause() = 0;
-  virtual void Seek(quint64 offset_nanosec) = 0;
+  virtual void Seek(quint64 offset_nanosec, bool accurate = false) = 0;
 
   virtual int AddBackgroundStream(const QUrl& url);
   virtual void StopBackgroundStream(int id) {}
@@ -116,7 +116,7 @@ class Base : public QObject, boost::noncopyable {
 
   // Emitted when Engine was unable to play a song with the given QUrl.
   void InvalidSongRequested(const QUrl&);
-  // Emitted when Engine successfully started playing a song with the 
+  // Emitted when Engine successfully started playing a song with the
   // given QUrl.
   void ValidSongRequested(const QUrl&);
 
@@ -138,6 +138,7 @@ class Base : public QObject, boost::noncopyable {
   uint volume_;
   quint64 beginning_nanosec_;
   qint64 end_nanosec_;
+  bool accurate_seek_;
   QUrl url_;
   Scope scope_;
 

@@ -21,8 +21,11 @@
 #include <QDialog>
 #include <QMap>
 #include <QUrl>
+#include <QList>
+#include <QPair>
 
 #include "core/organiseformat.h"
+#include "core/organise.h"
 #include "core/song.h"
 
 #include <boost/scoped_ptr.hpp>
@@ -76,9 +79,9 @@ private:
 
   OrganiseFormat format_;
 
-  QStringList filenames_;
-  SongList preview_songs_;
-  quint64 total_size_;
+  SongOrFilePairList songs_or_files_;
+  SongList           preview_songs_;
+  quint64            total_size_;
 
   boost::scoped_ptr<OrganiseErrorDialog> error_dialog_;
 

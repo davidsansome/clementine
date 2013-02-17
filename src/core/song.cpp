@@ -1112,7 +1112,7 @@ bool Song::IsMetadataEqual(const Song& other) const {
 
 bool Song::IsEditable() const {
   return d->valid_ && !d->url_.isEmpty() && !is_stream() &&
-         d->filetype_ != Type_Unknown && !has_cue();
+         d->filetype_ != Type_Unknown;
 }
 
 bool Song::operator==(const Song& other) const {

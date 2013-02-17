@@ -65,7 +65,7 @@ class GstEnginePipeline : public QObject {
 
   // Control the music playback
   QFuture<GstStateChangeReturn> SetState(GstState state);
-  Q_INVOKABLE bool Seek(qint64 nanosec);
+  Q_INVOKABLE bool Seek(qint64 nanosec, bool accurate_seek = false);
   void SetEqualizerEnabled(bool enabled);
   void SetEqualizerParams(int preamp, const QList<int>& band_gains);
   void SetVolume(int percent);
@@ -75,7 +75,7 @@ class GstEnginePipeline : public QObject {
 
   // If this is set then it will be loaded automatically when playback finishes
   // for gapless playback
-  void SetNextUrl(const QUrl& url, qint64 beginning_nanosec, qint64 end_nanosec);
+  void SetNextUrl(const QUrl& url, qint64 beginning_nanosec, qint64 end_nanosec, bool accurate_seek = false);
   bool has_next_valid_url() const { return next_url_.isValid(); }
 
   // Get information about the music playback
@@ -217,6 +217,7 @@ class GstEnginePipeline : public QObject {
   // other.
   qint64 next_beginning_offset_nanosec_;
   qint64 next_end_offset_nanosec_;
+  bool next_accurate_seek_;
 
   // Set temporarily when moving to the next contiguous section in a multi-part
   // file.
@@ -239,6 +240,7 @@ class GstEnginePipeline : public QObject {
   bool pipeline_is_initialised_;
   bool pipeline_is_connected_;
   qint64 pending_seek_nanosec_;
+  bool pending_seek_accurate_;
 
   int volume_percent_;
   qreal volume_modifier_;

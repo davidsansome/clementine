@@ -30,6 +30,7 @@
 #include "playlist/playlistdelegates.h"
 #include "ui/albumcoverchoicecontroller.h"
 #include "ui/coverfromurldialog.h"
+#include "playlistparsers/cueparser.h"
 
 #include <QDateTime>
 #include <QDir>
@@ -212,13 +213,26 @@ QList<EditTagDialog::Data> EditTagDialog::LoadData(const SongList& songs) const 
 
   foreach (const Song& song, songs) {
     if (song.IsEditable()) {
-      // Try reloading the tags from file
-      Song copy(song);
-      TagReaderClient::Instance()->ReadFileBlocking(copy.url().toLocalFile(), &copy);
 
-      if (copy.is_valid()) {
-        copy.MergeUserSetData(song);
-        ret << Data(copy);
+      if (song.has_cue()) {
+          CueParser parser(song.cue_path());
+          int index=parser.indexOf(song);
+          if (index==-1) {
+              Song copy(song);
+              ret << Data(copy);
+          } else {
+              Song copy(parser.GetSong(index));
+              ret << Data(copy);
+          }
+      } else {
+          // Try reloading the tags from file
+          Song copy(song);
+          TagReaderClient::Instance()->ReadFileBlocking(copy.url().toLocalFile(), &copy);
+
+          if (copy.is_valid()) {
+            copy.MergeUserSetData(song);
+            ret << Data(copy);
+          }
       }
     }
   }
@@ -647,15 +661,39 @@ void EditTagDialog::ButtonClicked(QAbstractButton* button) {
 }
 
 void EditTagDialog::SaveData(const QList<Data>& data) {
+  CueParser *parser=NULL;
+  QString    cuepath;
+
   for (int i=0 ; i<data.count() ; ++i) {
     const Data& ref = data[i];
     if (ref.current_.IsMetadataEqual(ref.original_))
       continue;
 
-    if (!TagReaderClient::Instance()->SaveFileBlocking(
+    if (ref.current_.has_cue()) {
+        if (cuepath!=ref.current_.cue_path()) {
+            if (parser!=NULL) {
+                parser->Write();
+            }
+            cuepath=ref.current_.cue_path();
+            if (parser!=NULL) { delete parser; }
+            parser=new CueParser(cuepath);
+        }
+
+        int index=parser->indexOf(ref.current_);
+        if (index>=0) {
+            parser->SetSong(index,ref.current_);
+        } else {
+            emit Error(tr("Cannot write metadata for song '%1'").arg(ref.current_.title()));
+        }
+    } else if (!TagReaderClient::Instance()->SaveFileBlocking(
           ref.current_.url().toLocalFile(), ref.current_)) {
       emit Error(tr("An error occurred writing metadata to '%1'").arg(ref.current_.url().toLocalFile()));
     }
+  }
+
+  if (parser!=NULL) {
+      parser->Write();
+      delete parser;
   }
 }
 

@@ -21,14 +21,50 @@
 #include <QBasicTimer>
 #include <QObject>
 #include <QTemporaryFile>
+#include <QUrl>
 
 #include <boost/shared_ptr.hpp>
 
 #include "organiseformat.h"
 #include "transcoder/transcoder.h"
+#include "core/song.h"
+
 
 class MusicStorage;
 class TaskManager;
+
+//////////////////////////////////////////////////////////////////////
+// Instead of communicating files we try as much as possible to
+// communicate songs to the organiser. Because, is a song is part
+// of a cuesheet, it needs to be segmented and the metadata will be
+// in the song, not in the file.
+//////////////////////////////////////////////////////////////////////
+
+class SongOrFilePair {
+private:
+    Song    song_;
+    QString file_;
+    int     type_;
+public:
+    SongOrFilePair(const Song & s);
+    SongOrFilePair(const QString & f);
+    SongOrFilePair();
+
+    Song & song();
+    QString & file();
+
+    bool IsFile();
+    bool IsSong();
+
+    QString DisplayName();
+
+    // Gets the songs file or file_
+    QString GetFile();
+};
+
+typedef QList<SongOrFilePair>      SongOrFilePairList;
+
+//////////////////////////////////////////////////////////////////////
 
 class Organise : public QObject {
   Q_OBJECT
@@ -37,7 +73,8 @@ public:
   Organise(TaskManager* task_manager,
            boost::shared_ptr<MusicStorage> destination,
            const OrganiseFormat& format, bool copy, bool overwrite,
-           const QStringList& files, bool eject_after);
+           const SongOrFilePairList & songOrFiles,
+           const  bool eject_after);
 
   static const int kBatchSize;
   static const int kTranscodeProgressInterval;
@@ -63,10 +100,14 @@ private:
 
 private:
   struct Task {
-    explicit Task(const QString& filename = QString())
-      : filename_(filename), transcode_progress_(0.0) {}
+      explicit Task(const SongOrFilePair & song_or_file)
+      : song_or_file_(song_or_file), transcode_progress_(0.0) {}
+      explicit Task()
+      : transcode_progress_(0.0) { }
 
-    QString filename_;
+    SongOrFilePair song_or_file_;
+    //QString filename_;
+    //SegmentPair segment_;
 
     float transcode_progress_;
     QString transcoded_filename_;

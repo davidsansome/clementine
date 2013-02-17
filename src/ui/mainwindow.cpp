@@ -67,6 +67,7 @@
 #include "playlist/queuemanager.h"
 #include "playlist/songplaylistitem.h"
 #include "playlistparsers/playlistparser.h"
+#include "playlistparsers/cueparser.h"
 #include "podcasts/podcastservice.h"
 #include "smartplaylists/generator.h"
 #include "smartplaylists/generatormimedata.h"
@@ -1470,12 +1471,14 @@ void MainWindow::RenumberTracks() {
     if (song.IsEditable()) {
       song.set_track(track);
 
-      TagReaderReply* reply =
-          TagReaderClient::Instance()->SaveFile(song.url().toLocalFile(), song);
+      if (!song.has_cue()) {
+          TagReaderReply* reply =
+              TagReaderClient::Instance()->SaveFile(song.url().toLocalFile(), song);
 
-      NewClosure(reply, SIGNAL(Finished(bool)),
-                 this, SLOT(SongSaveComplete(TagReaderReply*,QPersistentModelIndex)),
-                 reply, QPersistentModelIndex(source_index));
+          NewClosure(reply, SIGNAL(Finished(bool)),
+                     this, SLOT(SongSaveComplete(TagReaderReply*,QPersistentModelIndex)),
+                     reply, QPersistentModelIndex(source_index));
+      }
     }
     track++;
   }
@@ -1504,12 +1507,16 @@ void MainWindow::SelectionSetValue() {
     Song song = app_->playlist_manager()->current()->item_at(row)->Metadata();
 
     if (Playlist::set_column_value(song, column, column_value)) {
-      TagReaderReply* reply =
-          TagReaderClient::Instance()->SaveFile(song.url().toLocalFile(), song);
+        if (song.has_cue()) {
+            CueParser::SaveSong(song);
+        } else {
+          TagReaderReply* reply =
+              TagReaderClient::Instance()->SaveFile(song.url().toLocalFile(), song);
 
-      NewClosure(reply, SIGNAL(Finished(bool)),
-                 this, SLOT(SongSaveComplete(TagReaderReply*,QPersistentModelIndex)),
-                 reply, QPersistentModelIndex(source_index));
+          NewClosure(reply, SIGNAL(Finished(bool)),
+                     this, SLOT(SongSaveComplete(TagReaderReply*,QPersistentModelIndex)),
+                     reply, QPersistentModelIndex(source_index));
+       }
     }
   }
 }

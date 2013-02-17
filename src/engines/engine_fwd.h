@@ -29,6 +29,7 @@ namespace Engine
 
       // Any of:
       SameAlbum = 0x10,
+      AccurateSeek = 0x20,          // Accurate seeking requested
     };
     Q_DECLARE_FLAGS(TrackChangeFlags, TrackChangeType);
 }

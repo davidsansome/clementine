@@ -21,10 +21,12 @@
 
 #include "enginebase.h"
 #include "core/timeconstants.h"
+#include "core/logging.h"
 
 #include <cmath>
 
 #include <QSettings>
+#include <QtDebug>
 
 const char* Engine::Base::kSettingsGroup = "Player";
 
@@ -46,7 +48,7 @@ Engine::Base::Base()
 Engine::Base::~Base() {
 }
 
-bool Engine::Base::Load(const QUrl& url, TrackChangeFlags,
+bool Engine::Base::Load(const QUrl& url, TrackChangeFlags flags,
                         bool force_stop_at_end,
                         quint64 beginning_nanosec, qint64 end_nanosec) {
   Q_UNUSED(force_stop_at_end);
@@ -54,6 +56,7 @@ bool Engine::Base::Load(const QUrl& url, TrackChangeFlags,
   url_ = url;
   beginning_nanosec_ = beginning_nanosec;
   end_nanosec_ = end_nanosec;
+  accurate_seek_ = (flags & Engine::AccurateSeek);
 
   about_to_end_emitted_ = false;
   return true;
@@ -96,8 +99,9 @@ int Engine::Base::AddBackgroundStream(const QUrl& url) {
 bool Engine::Base::Play(const QUrl& u, TrackChangeFlags c,
                         bool force_stop_at_end,
                         quint64 beginning_nanosec, qint64 end_nanosec) {
+
   if (!Load(u, c, force_stop_at_end, beginning_nanosec, end_nanosec))
     return false;
 
-  return Play(0);
+  return Play(0, (c & Engine::AccurateSeek) );
 }

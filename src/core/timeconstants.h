@@ -30,6 +30,7 @@ const qint64 kUsecPerSec  = 1000000ll;
 const qint64 kNsecPerUsec = 1000ll;
 const qint64 kNsecPerMsec = 1000000ll;
 const qint64 kNsecPerSec  = 1000000000ll;
+const qint64 kNsecPerHsec = 10000000ll;
 
 const qint64 kSecsPerDay  = 24 * 60 * 60;
 

@@ -89,15 +89,15 @@ class GstEngine : public Engine::Base, public BufferConsumer {
 
  public slots:
   void StartPreloading(const QUrl& url, bool force_stop_at_end,
-                       qint64 beginning_nanosec, qint64 end_nanosec);
+                       qint64 beginning_nanosec, qint64 end_nanosec, bool accurate_seek = false);
   bool Load(const QUrl&, Engine::TrackChangeFlags change,
             bool force_stop_at_end,
             quint64 beginning_nanosec, qint64 end_nanosec);
-  bool Play(quint64 offset_nanosec);
+  bool Play(quint64 offset_nanosec, bool accurate_seek = false);
   void Stop();
   void Pause();
   void Unpause();
-  void Seek(quint64 offset_nanosec);
+  void Seek(quint64 offset_nanosec, bool accurate = false);
 
   /** Set whether equalizer is enabled */
   void SetEqualizerEnabled(bool);
@@ -131,7 +131,13 @@ class GstEngine : public Engine::Base, public BufferConsumer {
   void BufferingFinished();
 
  private:
-  typedef QPair<quint64, int> PlayFutureWatcherArg;
+
+  typedef struct {
+    quint64 offset_;
+    int id_;
+    bool accurate_seek_;
+  } PlayFutureWatcherArg;
+
   typedef BoundFutureWatcher<GstStateChangeReturn, PlayFutureWatcherArg> PlayFutureWatcher;
 
   static void SetEnv(const char* key, const QString& value);
@@ -198,6 +204,7 @@ class GstEngine : public Engine::Base, public BufferConsumer {
   QTimer* seek_timer_;
   bool waiting_to_seek_;
   quint64 seek_pos_;
+  bool seek_accurate_;
 
   int timer_id_;
   int next_element_id_;

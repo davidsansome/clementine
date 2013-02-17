@@ -47,6 +47,7 @@
 #include "smartplaylists/generator.h"
 #include "smartplaylists/generatorinserter.h"
 #include "smartplaylists/generatormimedata.h"
+#include "playlistparsers/cueparser.h"
 
 #include <QApplication>
 #include <QBuffer>
@@ -356,12 +357,16 @@ bool Playlist::setData(const QModelIndex& index, const QVariant& value, int role
     library_->AddOrUpdateSongs(SongList() << song);
     emit EditingFinished(index);
   } else {
-    TagReaderReply* reply = TagReaderClient::Instance()->SaveFile(
-          song.url().toLocalFile(), song);
+      if (song.has_cue()) {
+          CueParser::SaveSong(song);
+      } else {
+        TagReaderReply* reply = TagReaderClient::Instance()->SaveFile(
+              song.url().toLocalFile(), song);
 
-    NewClosure(reply, SIGNAL(Finished(bool)),
-               this, SLOT(SongSaveComplete(TagReaderReply*,QPersistentModelIndex)),
-               reply, QPersistentModelIndex(index));
+        NewClosure(reply, SIGNAL(Finished(bool)),
+                   this, SLOT(SongSaveComplete(TagReaderReply*,QPersistentModelIndex)),
+                   reply, QPersistentModelIndex(index));
+      }
   }
   return true;
 }

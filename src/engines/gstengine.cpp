@@ -286,7 +286,7 @@ void GstEngine::UpdateScope() {
 }
 
 void GstEngine::StartPreloading(const QUrl& url, bool force_stop_at_end,
-                                qint64 beginning_nanosec, qint64 end_nanosec) {
+                                qint64 beginning_nanosec, qint64 end_nanosec, bool accurate_seek) {
   EnsureInitialised();
 
   QUrl gst_url = FixupUrl(url);
@@ -295,7 +295,7 @@ void GstEngine::StartPreloading(const QUrl& url, bool force_stop_at_end,
   // pipeline and get gapless playback (hopefully)
   if (current_pipeline_)
     current_pipeline_->SetNextUrl(gst_url, beginning_nanosec,
-        force_stop_at_end ? end_nanosec : 0);
+        force_stop_at_end ? end_nanosec : 0, accurate_seek);
 }
 
 QUrl GstEngine::FixupUrl(const QUrl& url) {
@@ -368,15 +368,15 @@ void GstEngine::StartFadeout() {
 }
 
 
-bool GstEngine::Play(quint64 offset_nanosec) {
+bool GstEngine::Play(quint64 offset_nanosec, bool accurate_seek) {
   EnsureInitialised();
 
   if (!current_pipeline_ || current_pipeline_->is_buffering())
     return false;
 
   QFuture<GstStateChangeReturn> future = current_pipeline_->SetState(GST_STATE_PLAYING);
-  PlayFutureWatcher* watcher = new PlayFutureWatcher(
-        PlayFutureWatcherArg(offset_nanosec, current_pipeline_->id()), this);
+  PlayFutureWatcherArg arg = { offset_nanosec, current_pipeline_->id(), accurate_seek };
+  PlayFutureWatcher* watcher = new PlayFutureWatcher( arg, this );
   watcher->setFuture(future);
   connect(watcher, SIGNAL(finished()), SLOT(PlayDone()));
 
@@ -388,9 +388,10 @@ void GstEngine::PlayDone() {
   watcher->deleteLater();
 
   GstStateChangeReturn ret = watcher->result();
-  quint64 offset_nanosec = watcher->data().first;
+  quint64 offset_nanosec = watcher->data().offset_;
+  bool accurate_seek = watcher->data().accurate_seek_;
 
-  if (!current_pipeline_ || watcher->data().second != current_pipeline_->id()) {
+  if (!current_pipeline_ || watcher->data().id_ != current_pipeline_->id()) {
     return;
   }
 
@@ -400,7 +401,7 @@ void GstEngine::PlayDone() {
     if (!redirect_url.isEmpty() && redirect_url != current_pipeline_->url()) {
       qLog(Info) << "Redirecting to" << redirect_url;
       current_pipeline_ = CreatePipeline(redirect_url, end_nanosec_);
-      Play(offset_nanosec);
+      Play(offset_nanosec, accurate_seek);
       return;
     }
 
@@ -417,7 +418,7 @@ void GstEngine::PlayDone() {
 
   // initial offset
   if(offset_nanosec != 0 || beginning_nanosec_ != 0) {
-    Seek(offset_nanosec);
+    Seek(offset_nanosec, accurate_seek);
   }
 
   emit StateChanged(Engine::Playing);
@@ -469,12 +470,13 @@ void GstEngine::Unpause() {
   }
 }
 
-void GstEngine::Seek(quint64 offset_nanosec) {
+void GstEngine::Seek(quint64 offset_nanosec, bool accurate_seek) {
   if (!current_pipeline_)
     return;
 
   seek_pos_ = beginning_nanosec_ + offset_nanosec;
   waiting_to_seek_ = true;
+  seek_accurate_ = accurate_seek;
 
   if (!seek_timer_->isActive()) {
     SeekNow();
@@ -489,7 +491,7 @@ void GstEngine::SeekNow() {
   if (!current_pipeline_)
     return;
 
-  if (current_pipeline_->Seek(seek_pos_))
+  if (current_pipeline_->Seek(seek_pos_,seek_accurate_))
     ClearScopeBuffers();
   else
     qLog(Warning) << "Seek failed";
@@ -571,8 +573,8 @@ void GstEngine::HandlePipelineError(int pipeline_id, const QString& message,
   // unable to play media stream with this url
   emit InvalidSongRequested(url_);
 
-  // TODO: the types of errors listed below won't be shown to user - they will 
-  // get logged and the current song will be skipped; instead of maintaining 
+  // TODO: the types of errors listed below won't be shown to user - they will
+  // get logged and the current song will be skipped; instead of maintaining
   // the list we should probably:
   // - don't report any engine's errors to user (always just log and skip)
   // - come up with a less intrusive error box (not a dialog but a notification

@@ -100,6 +100,7 @@ set(SOURCES
   core/networkproxyfactory.cpp
   core/organise.cpp
   core/organiseformat.cpp
+  core/segmenter.cpp
   core/player.cpp
   core/qtfslistener.cpp
   core/qxtglobalshortcutbackend.cpp
@@ -409,6 +410,7 @@ set(HEADERS
   core/mimedata.h
   core/network.h
   core/organise.h
+  core/segmenter.h
   core/player.h
   core/qtfslistener.h
   core/songloader.h
@@ -1189,6 +1191,7 @@ target_link_libraries(clementine_lib
   libclementine-common
   libclementine-tagreader
   libclementine-remote
+  ${MP3SPLT_LIBRARIES}
   ${SHA2_LIBRARIES}
   ${TAGLIB_LIBRARIES}
   ${MYGPOQT_LIBRARIES}

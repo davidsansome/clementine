@@ -1,5 +1,6 @@
 /* This file is part of Clementine.
    Copyright 2010, David Sansome <me@davidsansome.com>
+   2013, Hans Oesterholt <debian@oesterholt.net>
 
    Clementine is free software: you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -20,6 +21,8 @@
 #include "taskmanager.h"
 #include "core/logging.h"
 #include "core/tagreaderclient.h"
+#include "core/segmenter.h"
+#include "core/song.h"
 
 #include <QDir>
 #include <QFileInfo>
@@ -35,7 +38,9 @@ const int Organise::kTranscodeProgressInterval = 500;
 Organise::Organise(TaskManager* task_manager,
                    boost::shared_ptr<MusicStorage> destination,
                    const OrganiseFormat &format, bool copy, bool overwrite,
-                   const QStringList& files, bool eject_after)
+                   //const QStringList& files, const SegmentPairList & segments,
+                   const SongOrFilePairList & songs_or_files,
+                   bool eject_after)
                      : thread_(NULL),
                        task_manager_(task_manager),
                        transcoder_(new Transcoder(this)),
@@ -44,7 +49,7 @@ Organise::Organise(TaskManager* task_manager,
                        copy_(copy),
                        overwrite_(overwrite),
                        eject_after_(eject_after),
-                       task_count_(files.count()),
+                       task_count_(songs_or_files.count()),
                        transcode_suffix_(1),
                        tasks_complete_(0),
                        started_(false),
@@ -53,8 +58,8 @@ Organise::Organise(TaskManager* task_manager,
 {
   original_thread_ = thread();
 
-  foreach (const QString& filename, files) {
-    tasks_pending_ << Task(filename);
+  foreach (const SongOrFilePair & sof, songs_or_files ) {
+      tasks_pending_ << Task(sof);
   }
 }
 
@@ -79,8 +84,10 @@ void Organise::ProcessSomeFiles() {
 
     if (!destination_->StartCopy(&supported_filetypes_)) {
       // Failed to start - mark everything as failed :(
-      foreach (const Task& task, tasks_pending_)
-        files_with_errors_ << task.filename_;
+      foreach (const Task& task, tasks_pending_) {
+          SongOrFilePair sp=task.song_or_file_;
+          files_with_errors_ << sp.DisplayName();
+      }
       tasks_pending_.clear();
     }
     started_ = true;
@@ -123,14 +130,18 @@ void Organise::ProcessSomeFiles() {
       break;
 
     Task task = tasks_pending_.takeFirst();
-    qLog(Info) << "Processing" << task.filename_;
+    SongOrFilePair song_or_file=task.song_or_file_;
+    //qLog(Info) << "Processing" << task.filename_;
+
+    qLog(Info) << "Processing " << song_or_file.DisplayName();
 
     // Is it a directory?
-    if (QFileInfo(task.filename_).isDir()) {
-      QDir dir(task.filename_);
+    if (song_or_file.IsFile() && QFileInfo(song_or_file.file()).isDir()) {
+      QDir dir(song_or_file.file());
       foreach (const QString& entry, dir.entryList(
           QDir::Dirs | QDir::Files | QDir::NoDotAndDotDot | QDir::Readable)) {
-        tasks_pending_ << Task(task.filename_ + "/" + entry);
+        SongOrFilePair p(song_or_file.file()+"/"+entry);
+        tasks_pending_ << Task(p);
         task_count_ ++;
       }
       continue;
@@ -138,9 +149,13 @@ void Organise::ProcessSomeFiles() {
 
     // Read metadata from the file
     Song song;
-    TagReaderClient::Instance()->ReadFileBlocking(task.filename_, &song);
-    if (!song.is_valid())
-      continue;
+    if (song_or_file.IsFile()) {
+        TagReaderClient::Instance()->ReadFileBlocking(song_or_file.file(), &song);
+        if (!song.is_valid())
+          continue;
+    } else {
+        song=song_or_file.song();
+    }
 
     // Maybe this file is one that's been transcoded already?
     if (!task.transcoded_filename_.isEmpty()) {
@@ -168,22 +183,29 @@ void Organise::ProcessSomeFiles() {
                                     QString::number(transcode_suffix_++);
         task.new_extension_ = preset.extension_;
         task.new_filetype_ = dest_type;
-        tasks_transcoding_[task.filename_] = task;
+        //tasks_transcoding_[task.filename_] = task;
+        tasks_transcoding_[song_or_file.file()] = task;
 
         qLog(Debug) << "Transcoding to" << task.transcoded_filename_;
 
         // Start the transcoding - this will happen in the background and
         // FileTranscoded() will get called when it's done.  At that point the
         // task will get re-added to the pending queue with the new filename.
-        transcoder_->AddJob(task.filename_, preset, task.transcoded_filename_);
+        //transcoder_->AddJob(task.filename_, preset, task.transcoded_filename_);
+        QString filename=(song_or_file.IsFile()) ? song_or_file.file() :
+                                                   song_or_file.song().url().toLocalFile();
+        transcoder_->AddJob(filename, preset, task.transcoded_filename_);
         transcoder_->Start();
         continue;
       }
     }
 
+
     MusicStorage::CopyJob job;
+    QString _filename=song_or_file.IsFile() ? song_or_file.file() :
+                                              song_or_file.song().url().toLocalFile();
     job.source_ = task.transcoded_filename_.isEmpty() ?
-                  task.filename_ : task.transcoded_filename_;
+                  _filename : task.transcoded_filename_;
     job.destination_ = format_.GetFilenameForSong(song);
     job.metadata_ = song;
     job.overwrite_ = overwrite_;
@@ -191,13 +213,46 @@ void Organise::ProcessSomeFiles() {
     job.progress_ = boost::bind(&Organise::SetSongProgress,
                                 this, _1, !task.transcoded_filename_.isEmpty());
 
-    if (!destination_->CopyToStorage(job)) {
-      files_with_errors_ << task.filename_;
+    // Here we can split the transcoded file if we need to, because we want
+    // for songs that are part of a cue only the segment that we need.
+    QString segment_file;
+    qLog(Debug) << "File must be segmented?" << song.cue_path();
+    bool needs_segment=false;
+    if (song.has_cue()) {
+        qLog(Debug) << "File Needs Segmenting " << song.url();
+        needs_segment=true;
+        Segmenter *S=new Segmenter(job);
+        if (S->CanSegment()) {
+            if (S->Create()) {
+                segment_file=S->CreatedFileName();
+                job.source_=segment_file;
+            } else {
+                qLog(Error) << "Segment could not be created";
+            }
+        } else {
+            qLog(Info) << "Cannot create segment of " << job.source_;
+        }
+        delete S;
+    }
+
+    // if we're part of a cue we want the segment,
+    // and if we can't get it, it's no use writing the
+    // whole MP3 file for each song again.
+    if (needs_segment && segment_file.isEmpty()) {
+        files_with_errors_ << song_or_file.DisplayName();
+    } else {
+        if (!destination_->CopyToStorage(job)) {
+          files_with_errors_ << song_or_file.DisplayName();
+        }
     }
 
     // Clean up the temporary transcoded file
     if (!task.transcoded_filename_.isEmpty())
       QFile::remove(task.transcoded_filename_);
+
+    // Clean up the segmented file if it is there
+    if (!segment_file.isEmpty())
+        QFile::remove(segment_file);
 
     tasks_complete_++;
   }
@@ -270,7 +325,7 @@ void Organise::UpdateProgress() {
   // Add the progress of the track that's currently copying
   progress += current_copy_progress_;
 
-  task_manager_->SetTaskProgress(task_id_, progress, total);
+   task_manager_->SetTaskProgress(task_id_, progress, total);
 }
 
 void Organise::FileTranscoded(const QString& filename, bool success) {
@@ -298,4 +353,52 @@ void Organise::timerEvent(QTimerEvent* e) {
   if (e->timerId() == transcode_progress_timer_.timerId()) {
     UpdateProgress();
   }
+}
+
+//////////////////////////////////////////////////////////////////////////
+// Implementation of SongOrFilePair
+//////////////////////////////////////////////////////////////////////////
+
+SongOrFilePair::SongOrFilePair(const Song & s) {
+    song_=s;type_=1;
+}
+
+SongOrFilePair::SongOrFilePair(const QString & f) {
+    file_=f;type_=2;
+}
+
+SongOrFilePair::SongOrFilePair() {
+    type_=0;
+}
+
+Song & SongOrFilePair::song() {
+    return song_;
+}
+
+QString & SongOrFilePair::file() {
+    return file_;
+}
+
+bool SongOrFilePair::IsFile() {
+    return type_==2;
+}
+
+bool SongOrFilePair::IsSong() {
+    return type_==1;
+}
+
+QString SongOrFilePair::DisplayName() {
+    if (this->IsSong()) {
+        return song_.artist() + ", " + song_.title();
+    } else {
+        return file_;
+    }
+}
+
+QString SongOrFilePair::GetFile() {
+    if (this->IsFile()) {
+        return file_;
+    } else {
+        return song_.url().toLocalFile();
+    }
 }
