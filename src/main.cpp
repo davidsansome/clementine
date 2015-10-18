@@ -46,6 +46,7 @@
 #include "core/application.h"
 #include "core/commandlineoptions.h"
 #include "core/crashreporting.h"
+#include "core/dancedisplay.h"
 #include "core/database.h"
 #include "core/logging.h"
 #include "core/mac_startup.h"
@@ -468,6 +469,8 @@ int main(int argc, char* argv[]) {
 #ifdef HAVE_DBUS
   mpris::Mpris mpris(&app);
 #endif
+
+  DanceDisplay dance_display(&app);
 
   // Window
   MainWindow w(&app, tray_icon.get(), &osd);

@@ -80,6 +80,7 @@ set(SOURCES
   core/backgroundstreams.cpp
   core/commandlineoptions.cpp
   core/crashreporting.cpp
+  core/dancedisplay.cpp
   core/database.cpp
   core/deletefiles.cpp
   core/filesystemmusicstorage.cpp
@@ -410,6 +411,7 @@ set(HEADERS
   core/application.h
   core/backgroundstreams.h
   core/crashreporting.h
+  core/dancedisplay.h
   core/database.h
   core/deletefiles.h
   core/filesystemwatcherinterface.h

@@ -1312,7 +1312,7 @@ bool Playlist::CompareItems(int column, Qt::SortOrder order,
 QString Playlist::column_name(Column column) {
   switch (column) {
     case Column_Title:
-      return tr("Title");
+      return tr("Popular/Intermediate Line Dance");
     case Column_Artist:
       return tr("Artist");
     case Column_Album:
@@ -1320,9 +1320,9 @@ QString Playlist::column_name(Column column) {
     case Column_Length:
       return tr("Length");
     case Column_Track:
-      return tr("Track");
+      return tr("Rating");
     case Column_Disc:
-      return tr("Disc");
+      return tr("Count In");
     case Column_Year:
       return tr("Year");
     case Column_OriginalYear:
@@ -1330,13 +1330,13 @@ QString Playlist::column_name(Column column) {
     case Column_Genre:
       return tr("Genre");
     case Column_AlbumArtist:
-      return tr("Album artist");
+      return tr("Market");
     case Column_Composer:
-      return tr("Composer");
+      return tr("Partner Dance");
     case Column_Performer:
       return tr("Performer");
     case Column_Grouping:
-      return tr("Grouping");
+      return tr("Rhythm");
 
     case Column_Rating:
       return tr("Rating");
@@ -1369,7 +1369,7 @@ QString Playlist::column_name(Column column) {
       return tr("Date created");
 
     case Column_Comment:
-      return tr("Comment");
+      return tr("Beginner/Split Line Dance");
     case Column_Source:
       return tr("Source");
     case Column_Mood:

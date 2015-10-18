@@ -1,0 +1,157 @@
+<html>
+  <head>
+    <style>
+      table {
+        margin: 4em;
+        font-size: 3vh;
+        font-family: sans;
+      }
+
+      th, td {
+        padding: 0.25em 1.5em;
+      }
+
+      th {
+        text-align: left;
+      }
+    </style>
+
+    <script>
+      var RHYTHMS = {
+        '2S': 'Two Step',
+        'AZ': 'Arizona Two Step',
+        'CH': 'Cha Cha',
+        'CO': 'Cool Down',
+        'CW': 'Country Waltz',
+        'EC': 'East Coast Swing',
+        'FX': 'Foxtrot',
+        'HU': 'Hustle',
+        'MA': 'Mambo',
+        'ME': 'Merengue',
+        'N2': 'Nightclub Two Step',
+        'PO': 'Polka',
+        'RU': 'Rumba',
+        'QS': 'Quickstep',
+        'SL': 'Slow Dance',
+        'SW': 'Sway',
+        'TA': 'Tango',
+        'T2': 'Triple Two Step',
+        'VW': 'Viennese Waltz',
+        'WA': 'Waltz',
+        'WC': 'West Coast Swing',
+        'XX': 'Novelty',
+      };
+      var ELEMENTS = [
+        "file_name",
+        "artist",
+        "intermediate",
+        "beginner",
+        "partner",
+        "lead_follow",
+      ];
+
+      var lastResponse = null;
+
+      function UpdateDom(data, idPrefix) {
+        for (name of ELEMENTS) {
+          var element = document.getElementById(idPrefix + name);
+          if (!element) {
+            continue;
+          }
+
+          if (data) {
+            if (data[name] in RHYTHMS) {
+              element.innerText = RHYTHMS[data[name]];
+            } else {
+              element.innerText = data[name];
+            }
+          } else {
+            element.innerText = "-";
+          }
+        }
+      }
+
+      function Update() {
+        var req = new XMLHttpRequest();
+        req.onreadystatechange = function() {
+          if (req.readyState != 4) {
+            return;
+          }
+
+          if (req.status != 200) {
+            setTimeout(Update, 10000);
+          } else {
+            setTimeout(Update, 1000);
+            
+            var data = JSON.parse(req.responseText);
+            if (data == lastResponse) {
+              return;
+            }
+
+            UpdateDom(data["now"], "now_");
+            UpdateDom(data["next"], "next_");
+          }
+        };
+        req.open("GET", "http://localhost:5678/data.json");
+        req.send();
+      }
+      Update();
+    </script>
+  </head>
+
+  <body>
+    <table>
+      <tr class="title">
+        <th>Now Dancing</th>
+        <th>
+          <span class="value" id="now_file_name"></span> by
+          <span class="value" id="now_artist"></span>
+        </th>
+      </tr>
+
+      <tr>
+        <th>Intermediate Line</th>
+        <td class="value" id="now_intermediate"></td>
+      </tr>
+      <tr>
+        <th>Beginner Line</th>
+        <td class="value" id="now_beginner"></td>
+      </tr>
+      <tr>
+        <th>Partner Pattern</th>
+        <td class="value" id="now_partner"></td>
+      </tr>
+      <tr>
+        <th>Lead/Follow Rhythm</th>
+        <td class="value" id="now_lead_follow"></td>
+      </tr>
+    </table>
+
+    <table>
+      <tr class="title">
+        <th>Up Next</th>
+        <th>
+          <span class="value" id="next_file_name"></span> by
+          <span class="value" id="next_artist"></span>
+        </th>
+      </tr>
+
+      <tr>
+        <th>Intermediate Line</th>
+        <td class="value" id="next_intermediate"></td>
+      </tr>
+      <tr>
+        <th>Beginner Line</th>
+        <td class="value" id="next_beginner"></td>
+      </tr>
+      <tr>
+        <th>Partner Pattern</th>
+        <td class="value" id="next_partner"></td>
+      </tr>
+      <tr>
+        <th>Lead/Follow Rhythm</th>
+        <td class="value" id="next_lead_follow"></td>
+      </tr>
+    </table>
+  </body>
+</html>
