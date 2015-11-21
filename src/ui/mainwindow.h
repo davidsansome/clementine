@@ -277,6 +277,7 @@ signals:
   void DoGlobalSearch(const QString& query);
 
   void ShowConsole();
+  void ShowDanceDisplay();
 
  private:
   void ConnectInfoView(SongInfoBase* view);

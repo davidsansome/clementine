@@ -22,6 +22,7 @@
 #include <memory>
 
 #include <QCloseEvent>
+#include <QDesktopServices>
 #include <QDir>
 #include <QFileDialog>
 #include <QFileSystemModel>
@@ -850,6 +851,8 @@ MainWindow::MainWindow(Application* app, SystemTrayIcon* tray_icon, OSD* osd,
           SLOT(EnableKittens(bool)));
   connect(ui_->action_kittens, SIGNAL(toggled(bool)), app_->network_remote(),
           SLOT(EnableKittens(bool)));
+  connect(ui_->action_dance_display, SIGNAL(triggered(bool)),
+          SLOT(ShowDanceDisplay()));
   // Hide the console
   // connect(ui_->action_console, SIGNAL(triggered()), SLOT(ShowConsole()));
   NowPlayingWidgetPositionChanged(ui_->now_playing->show_above_status_bar());
@@ -2792,4 +2795,8 @@ void MainWindow::keyPressEvent(QKeyEvent* event) {
   } else {
     QMainWindow::keyPressEvent(event);
   }
+}
+
+void MainWindow::ShowDanceDisplay() {
+  QDesktopServices::openUrl(QUrl("http://localhost:5678"));
 }
